@@ -72,3 +72,87 @@ def test_even_shelves_equal_gaps():
     edges = [T] + [e for z in zs for e in (z, z + T)] + [H - T]
     gaps = [edges[i + 1] - edges[i] for i in range(0, len(edges), 2)]
     assert gaps == pytest.approx([gaps[0]] * 4)
+
+# Binder fitting: dimensions are clear internal spaces, not external dimensions.
+from binder_fit import Binder, binder_spaces
+
+
+def fit_spaces(items=(), **kwargs):
+    args = dict(height=1000, depth=400, t=18, back_t=8,
+                col_widths=[500], items=items, binder=Binder())
+    args.update(kwargs)
+    return binder_spaces(**args)
+
+
+def test_binder_empty_cabinet_capacity():
+    s = fit_spaces()[0]
+    assert (s['height'], s['depth'], s['capacity']) == (964, 392, 6)
+
+
+def test_binder_shelf_thickness_and_shortfall():
+    spaces = fit_spaces([dict(col=1, type=SHELF, z=340, height=0)])
+    assert len(spaces) == 2
+    assert spaces[0]['missing_height'] == 8
+    assert spaces[1]['bottom'] == 358
+
+
+def test_binder_exact_fit_and_one_mm_short():
+    base = dict(height=366, depth=308, col_widths=[90])
+    assert fit_spaces(**base)[0]['fits']
+    for change, field in [({'height': 365}, 'missing_height'),
+                          ({'depth': 307}, 'missing_depth'),
+                          ({'col_widths': [89]}, 'missing_width')]:
+        result = fit_spaces(**dict(base, **change))[0]
+        assert not result['fits']
+        assert result[field] == 1
+
+
+def test_binder_overlapping_obstacles_merge():
+    items = [dict(col=1, type=DRAWER, z=18, height=400),
+             dict(col=1, type=SHELF, z=300, height=0)]
+    assert fit_spaces(items)[0]['bottom'] == 418
+
+
+def test_binder_columns_independent_and_doors_ignored():
+    items = [dict(col=1, type=DRAWER, z=18, height=600),
+             dict(col=2, type=DOOR, z=18, height=964)]
+    spaces = fit_spaces(items, col_widths=[100, 500])
+    assert [s['bottom'] for s in spaces] == [618, 18]
+    assert spaces[1]['x'] == 136
+
+
+def test_binder_rod_is_conservative_obstacle():
+    spaces = fit_spaces([dict(col=1, type=ROD, z=500, height=0)])
+    assert [(s['bottom'], s['top']) for s in spaces] == [(18, 500), (525, 982)]
+
+
+def test_binder_fully_blocked_column():
+    assert fit_spaces([dict(col=1, type=DRAWER, z=18, height=964)]) == []
+
+
+def test_binder_invalid_dimensions():
+    for key in ('height', 'depth', 'spine'):
+        for value in (0, -1, float('nan'), float('inf'), True):
+            with pytest.raises(ValueError):
+                Binder(**{key: value})
+    assert Binder(clearance=0).clearance == 0
+
+
+def test_binder_leaves_items_unchanged():
+    items = [dict(col=1, type=SHELF, z=400, height=0)]
+    before = [dict(item) for item in items]
+    fit_spaces(items)
+    assert items == before
+
+
+def test_binder_app_loads_and_reacts_to_dimensions():
+    from pathlib import Path
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file(str(Path(__file__).with_name('app.py'))).run(timeout=30)
+    assert not app.exception
+    assert any(tab.label == 'בדיקת קלסרים' for tab in app.tabs)
+    assert app.number_input(key='binder_height').value == 320
+    app.number_input(key='binder_height').set_value(600).run(timeout=30)
+    assert not app.exception
+    assert app.number_input(key='binder_height').value == 600

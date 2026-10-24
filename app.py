@@ -5,6 +5,7 @@ import streamlit as st
 from cabinet import (DRAWER, ITEM_TYPES, ROD, SHELF, build_panels, cut_list, default_col_widths,
                      even_shelves, price)
 from view3d import figure
+from binder_fit import render_binder_check
 
 st.set_page_config(page_title="תכנון ארון", layout="wide")
 st.markdown("<style>.stApp, [data-testid='stSidebar'] {direction: rtl; text-align: right;}</style>",
@@ -73,7 +74,7 @@ except ValueError as e:
     st.stop()
 
 with right:
-    tab3d, tabcut = st.tabs(["תלת־ממד", "רשימת חיתוך ומחיר"])
+    tab3d, tabcut, tabbinders = st.tabs(["תלת־ממד", "רשימת חיתוך ומחיר", "בדיקת קלסרים"])
     with tab3d:
         show_doors = st.toggle("הצג דלתות וחזיתות", True)
         st.plotly_chart(figure(panels, show_doors), use_container_width=True)
@@ -88,3 +89,5 @@ with right:
                   delta_color="off")
         m2.metric("פרזול", f"₪{pr['hardware']:,.0f}")
         m3.metric("סה\"כ", f"₪{pr['total']:,.0f}")
+    with tabbinders:
+        render_binder_check(panels, H, D, t, back_t, cols_df["רוחב"].tolist(), items)
